@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dev.log
+*.log
+/temp_bank*
+*.doc
+parsed_raw.json
+.DS_Store
+opencode.json
