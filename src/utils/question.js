@@ -52,3 +52,21 @@ export function formatTime(seconds) {
   const s = seconds % 60
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
+
+import { KNOWLEDGE_POINTS, FALLBACK_POINT } from '../data/knowledgePoints.js'
+
+const pointsCache = new Map()
+
+export function getPoints(q) {
+  const key = q.id + '_' + q.subject
+  if (pointsCache.has(key)) return pointsCache.get(key)
+  const list = KNOWLEDGE_POINTS[q.subject] || []
+  const matched = list.filter((p) => p.kw.some((k) => q.question.includes(k)))
+  const result = matched.length ? matched : [FALLBACK_POINT]
+  pointsCache.set(key, result)
+  return result
+}
+
+export function primaryPoint(q) {
+  return getPoints(q)[0]
+}

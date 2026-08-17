@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { useBankStore } from '../stores/bank'
 import { useUserStore } from '../stores/user'
 import { CHAPTERS, SUBJECT_NAMES } from '../data/chapters'
+import { KNOWLEDGE_POINTS } from '../data/knowledgePoints'
+import { primaryPoint } from '../utils/question'
 
 const router = useRouter()
 const bank = useBankStore()
@@ -11,8 +13,10 @@ const user = useUserStore()
 
 const subject = ref(1)
 const showChapters = ref(false)
+const showPoints = ref(false)
 
 const chapters = computed(() => CHAPTERS[subject.value])
+const points = computed(() => KNOWLEDGE_POINTS[subject.value])
 const total = computed(() => bank.countBySubject(subject.value))
 const wrongCount = computed(() => user.wrongIds.filter((id) => {
   const q = bank.allQuestions.find((x) => x.id === id)
@@ -28,6 +32,15 @@ const chapterCounts = computed(() => {
   const map = {}
   for (const q of bank.questionsBySubject(subject.value)) {
     map[q.chapter] = (map[q.chapter] || 0) + 1
+  }
+  return map
+})
+
+const pointCounts = computed(() => {
+  const map = {}
+  for (const q of bank.questionsBySubject(subject.value)) {
+    const id = primaryPoint(q).id
+    map[id] = (map[id] || 0) + 1
   }
   return map
 })
@@ -57,6 +70,14 @@ const MODES = [
     color: '#0ea5a5',
     bg: 'rgba(14,165,165,0.1)',
     icon: 'M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7'
+  },
+  {
+    key: 'point',
+    name: '知识点练习',
+    desc: '按知识点分类突破',
+    color: '#d946ef',
+    bg: 'rgba(217,70,239,0.1)',
+    icon: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 3z'
   },
   {
     key: 'chapter',
@@ -96,7 +117,11 @@ function modeAction(key) {
   if (key === 'exam') {
     router.push({ name: 'exam', params: { subject: subject.value } })
   } else if (key === 'chapter') {
+    showPoints.value = false
     showChapters.value = !showChapters.value
+  } else if (key === 'point') {
+    showChapters.value = false
+    showPoints.value = !showPoints.value
   } else {
     goPractice(key)
   }
@@ -156,6 +181,28 @@ function modeAction(key) {
         <span class="mode-name">{{ m.name }}</span>
         <span class="mode-desc">{{ m.desc }}</span>
         <span class="mode-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </button>
+    </div>
+
+    <div v-if="showPoints" class="card chapter-panel">
+      <div class="panel-head">
+        <span class="panel-title">选择知识点</span>
+        <button class="panel-close" @click="showPoints = false">收起</button>
+      </div>
+      <button
+        v-for="p in points"
+        :key="p.id"
+        class="chapter-item"
+        @click="goPractice('point', p.id)"
+      >
+        <span class="chapter-dot point-dot" />
+        <span class="chapter-name">{{ p.name }}</span>
+        <span class="chapter-count">{{ pointCounts[p.id] || 0 }} 题</span>
+        <span class="chapter-arrow">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 5l7 7-7 7" />
           </svg>
@@ -484,6 +531,13 @@ function modeAction(key) {
   border-radius: 50%;
   background: var(--grad-primary);
   flex-shrink: 0;
+}
+
+.point-dot {
+  background: linear-gradient(135deg, #d946ef, #a21caf);
+  border-radius: 3px;
+  width: 9px;
+  height: 9px;
 }
 
 .chapter-name {

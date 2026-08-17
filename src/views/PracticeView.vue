@@ -4,8 +4,9 @@ import { useRoute, useRouter } from 'vue-router'
 import QuestionCard from '../components/QuestionCard.vue'
 import { useBankStore } from '../stores/bank'
 import { useUserStore } from '../stores/user'
-import { shuffle, isCorrect, LETTERS } from '../utils/question'
+import { shuffle, isCorrect, LETTERS, primaryPoint } from '../utils/question'
 import { CHAPTER_NAME_BY_ID } from '../data/chapters'
+import { POINT_NAME_BY_ID } from '../data/knowledgePoints'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,12 +30,16 @@ const title = computed(() => {
     order: '顺序练习',
     random: '随机练习',
     chapter: '专项练习',
+    point: '知识点练习',
     wrong: '错题本',
     favorite: '收藏夹'
   }
   let t = map[mode.value] || '练习'
   if (mode.value === 'chapter') {
     t = CHAPTER_NAME_BY_ID[chapter.value] || t
+  }
+  if (mode.value === 'point') {
+    t = POINT_NAME_BY_ID[chapter.value] || t
   }
   return t
 })
@@ -50,6 +55,8 @@ function buildList() {
   let qs = bank.questionsBySubject(subject.value)
   if (mode.value === 'chapter') {
     qs = qs.filter((q) => q.chapter === chapter.value)
+  } else if (mode.value === 'point') {
+    qs = qs.filter((q) => primaryPoint(q).id === chapter.value)
   } else if (mode.value === 'wrong') {
     qs = qs.filter((q) => user.wrongIds.includes(q.id))
   } else if (mode.value === 'favorite') {
@@ -58,7 +65,7 @@ function buildList() {
   if (mode.value === 'random' || mode.value === 'wrong' || mode.value === 'favorite') {
     qs = shuffle(qs)
   }
-  if (mode.value === 'order' || mode.value === 'chapter') {
+  if (mode.value === 'order' || mode.value === 'chapter' || mode.value === 'point') {
     const saved = user.practicePos[posKey.value]
     current.value = saved && saved < qs.length ? saved : 0
   } else {
@@ -66,6 +73,7 @@ function buildList() {
   }
   list.value = qs
   resetMaps()
+  clearAuto()
   finished.value = qs.length === 0
 }
 
@@ -84,17 +92,32 @@ const answeredCount = computed(() => Object.keys(answeredMap).length)
 const progress = computed(() => total.value === 0 ? 0 : (answeredCount.value / total.value) * 100)
 const correctCount = computed(() => Object.values(answeredMap).filter((v) => v === 'ok').length)
 
+let autoTimer = null
+
+function clearAuto() {
+  if (autoTimer) {
+    clearTimeout(autoTimer)
+    autoTimer = null
+  }
+}
+
 function markAnswered(ok) {
   if (!q.value) return
   answeredMap[q.value.id] = ok ? 'ok' : 'no'
   if (ok) {
     if (mode.value === 'wrong') user.removeWrong(q.value.id)
+    clearAuto()
+    autoTimer = setTimeout(() => {
+      autoTimer = null
+      if (!finished.value) next()
+    }, 1300)
   } else {
     user.addWrong(q.value.id)
   }
 }
 
 function next() {
+  clearAuto()
   if (current.value < total.value - 1) {
     user.setPracticePos(posKey.value, current.value + 1)
     current.value++
@@ -105,11 +128,13 @@ function next() {
 }
 
 function prev() {
+  clearAuto()
   if (current.value > 0) current.value--
 }
 
 function jumpTo(i) {
   if (i >= 0 && i < total.value) {
+    clearAuto()
     current.value = i
     window.scrollTo({ top: 0 })
   }
@@ -175,7 +200,10 @@ function onKey(e) {
 }
 
 onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  clearAuto()
+})
 
 function cellClass(id, i) {
   return {
@@ -223,6 +251,7 @@ function cellClass(id, i) {
           mode="practice"
           :model-value="selectionsMap[q.id] || []"
           :reveal="answeredMap[q.id] !== undefined"
+          :auto-next="true"
           @update:model-value="(v) => (selectionsMap[q.id] = v)"
           @answered="markAnswered"
         />

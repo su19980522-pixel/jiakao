@@ -1,12 +1,13 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { isCorrect, LETTERS, TYPE_NAMES } from '../utils/question'
+import { isCorrect, LETTERS, TYPE_NAMES, getPoints } from '../utils/question'
 
 const props = defineProps({
   question: { type: Object, required: true },
   mode: { type: String, default: 'practice' },
   modelValue: { type: Array, default: () => [] },
-  reveal: { type: Boolean, default: false }
+  reveal: { type: Boolean, default: false },
+  autoNext: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:modelValue', 'answered'])
@@ -19,6 +20,7 @@ const showResult = computed(() => props.reveal || (props.mode === 'practice' && 
 const answered = computed(() => props.modelValue.length > 0)
 const correct = computed(() => answered.value && isCorrect(q.value, props.modelValue))
 const imgs = computed(() => (q.value.images && q.value.images.length ? q.value.images : q.value.image ? [q.value.image] : []))
+const points = computed(() => getPoints(q.value))
 
 function selectOption(letter) {
   if (showResult.value && props.mode !== 'exam') return
@@ -126,10 +128,15 @@ function optionClass(letter) {
             {{ correct ? '回答正确' : '回答错误' }}
           </span>
           <span v-if="!correct" class="answer-key">正确答案：{{ q.answer.join('、') }}</span>
+          <span v-if="correct && autoNext && mode === 'practice'" class="auto-next-tip">稍后自动进入下一题</span>
         </div>
         <div v-if="q.explanation" class="explain-body">
           <span class="exp-tag">解析</span>
           {{ q.explanation }}
+        </div>
+        <div v-if="points.length" class="points">
+          <span class="points-label">相关知识点</span>
+          <span v-for="p in points" :key="p.id" class="point-chip">{{ p.name }}</span>
         </div>
       </div>
     </Transition>
@@ -385,6 +392,44 @@ function optionClass(letter) {
   margin-right: 8px;
   font-weight: 700;
   color: var(--text-2);
+}
+
+.auto-next-tip {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--success-strong);
+  opacity: 0.8;
+  animation: fadeInOut 1.2s ease infinite;
+}
+
+@keyframes fadeInOut {
+  50% { opacity: 0.4; }
+}
+
+.points {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.08);
+}
+
+.points-label {
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.point-chip {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary-strong);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid #b9cbf7;
+  padding: 1px 10px;
+  border-radius: 999px;
 }
 
 .explain-enter-active {
