@@ -1,4 +1,4 @@
-const PREFIX = 'jsq_'
+const PREFIX = 'jsq2_'
 
 export function load(key, fallback) {
   try {

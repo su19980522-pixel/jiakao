@@ -99,6 +99,7 @@ function next() {
     user.setPracticePos(posKey.value, current.value + 1)
     current.value++
   } else {
+    user.setPracticePos(posKey.value, 0)
     finished.value = true
   }
 }
@@ -163,7 +164,7 @@ function onKey(e) {
   } else if (e.key === 'Enter') {
     if (q.value.type === 'multi' && answeredMap[q.value.id] === undefined) {
       cardRef.value?.submit()
-    } else {
+    } else if (answeredMap[q.value.id] !== undefined) {
       next()
     }
   } else if (/^[A-D1-4]$/.test(k)) {
