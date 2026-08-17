@@ -7,6 +7,7 @@ import { useUserStore } from '../stores/user'
 import { shuffle, isCorrect, LETTERS, primaryPoint } from '../utils/question'
 import { CHAPTER_NAME_BY_ID } from '../data/chapters'
 import { POINT_NAME_BY_ID } from '../data/knowledgePoints'
+import { load, save } from '../utils/storage'
 
 const route = useRoute()
 const router = useRouter()
@@ -46,10 +47,34 @@ const title = computed(() => {
 })
 
 const posKey = computed(() => `${subject.value}_${mode.value}_${chapter.value}`)
+const PERSIST_KEY = 'practice_data'
 
 function resetMaps() {
   Object.keys(selectionsMap).forEach((k) => delete selectionsMap[k])
   Object.keys(answeredMap).forEach((k) => delete answeredMap[k])
+}
+
+function persistAnswers() {
+  const data = load(PERSIST_KEY, {})
+  data[posKey.value] = {
+    sels: { ...selectionsMap },
+    ans: { ...answeredMap }
+  }
+  save(PERSIST_KEY, data)
+}
+
+function restoreAnswers() {
+  const saved = load(PERSIST_KEY, {})[posKey.value]
+  if (saved) {
+    Object.assign(answeredMap, saved.ans || {})
+    Object.assign(selectionsMap, saved.sels || {})
+  }
+}
+
+function clearPersist() {
+  const data = load(PERSIST_KEY, {})
+  delete data[posKey.value]
+  save(PERSIST_KEY, data)
 }
 
 function buildList() {
@@ -75,6 +100,7 @@ function buildList() {
   list.value = qs
   resetMaps()
   clearAuto()
+  restoreAnswers()
   finished.value = qs.length === 0
 }
 
@@ -103,6 +129,7 @@ function clearAuto() {
 function markAnswered(ok) {
   if (!q.value) return
   answeredMap[q.value.id] = ok ? 'ok' : 'no'
+  persistAnswers()
   if (ok) {
     if (mode.value === 'wrong') user.removeWrong(q.value.id)
     clearAuto()
@@ -155,7 +182,14 @@ function toggleFav() {
   if (q.value) user.toggleFav(q.value.id)
 }
 
+function setSel(v) {
+  if (!q.value) return
+  selectionsMap[q.value.id] = v
+  persistAnswers()
+}
+
 function restart() {
+  clearPersist()
   buildList()
 }
 
@@ -251,7 +285,7 @@ function cellClass(id, i) {
           :model-value="selectionsMap[q.id] || []"
           :reveal="answeredMap[q.id] !== undefined"
           :auto-next="true"
-          @update:model-value="(v) => (selectionsMap[q.id] = v)"
+          @update:model-value="setSel"
           @answered="markAnswered"
         />
 
