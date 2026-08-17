@@ -24,6 +24,7 @@ const answeredMap = reactive({})
 const finished = ref(false)
 const cardRef = ref(null)
 const gridWrapRef = ref(null)
+let autoTimer = null
 
 const title = computed(() => {
   const map = {
@@ -91,8 +92,6 @@ const total = computed(() => list.value.length)
 const answeredCount = computed(() => Object.keys(answeredMap).length)
 const progress = computed(() => total.value === 0 ? 0 : (answeredCount.value / total.value) * 100)
 const correctCount = computed(() => Object.values(answeredMap).filter((v) => v === 'ok').length)
-
-let autoTimer = null
 
 function clearAuto() {
   if (autoTimer) {
