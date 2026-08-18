@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { load, save } from '../utils/storage'
-import { markDirty } from '../utils/cloudSync'
+import * as cloudSync from '../utils/cloudSync'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -22,37 +22,38 @@ export const useUserStore = defineStore('user', {
       if (!this.wrongIds.includes(id)) {
         this.wrongIds.push(id)
         save('wrong_ids', this.wrongIds)
-        markDirty()
+        cloudSync.syncWrong(id, true)
       }
     },
     removeWrong(id) {
       this.wrongIds = this.wrongIds.filter((x) => x !== id)
       save('wrong_ids', this.wrongIds)
-      markDirty()
+      cloudSync.syncWrong(id, false)
     },
     toggleFav(id) {
-      if (this.favIds.includes(id)) {
-        this.favIds = this.favIds.filter((x) => x !== id)
-      } else {
+      const add = !this.favIds.includes(id)
+      if (add) {
         this.favIds.push(id)
+      } else {
+        this.favIds = this.favIds.filter((x) => x !== id)
       }
       save('fav_ids', this.favIds)
-      markDirty()
+      cloudSync.syncFav(id, add)
     },
     addExamRecord(record) {
       this.examHistory = [record, ...this.examHistory].slice(0, 50)
       save('exam_history', this.examHistory)
-      markDirty()
+      cloudSync.syncExamRecord(record)
     },
     clearHistory() {
       this.examHistory = []
       save('exam_history', [])
-      markDirty()
+      cloudSync.clearExamRecords()
     },
     setPracticePos(key, index) {
       this.practicePos[key] = index
       save('practice_pos', this.practicePos)
-      markDirty()
+      cloudSync.syncPracticePos(key, index)
     }
   }
 })

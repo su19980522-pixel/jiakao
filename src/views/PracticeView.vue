@@ -8,7 +8,7 @@ import { shuffle, isCorrect, LETTERS, primaryPoint } from '../utils/question'
 import { CHAPTER_NAME_BY_ID } from '../data/chapters'
 import { POINT_NAME_BY_ID } from '../data/knowledgePoints'
 import { load, save } from '../utils/storage'
-import { markDirty } from '../utils/cloudSync'
+import { syncPracticeState, clearPracticeState } from '../utils/cloudSync'
 
 const route = useRoute()
 const router = useRouter()
@@ -62,7 +62,6 @@ function persistAnswers() {
     ans: { ...answeredMap }
   }
   save(PERSIST_KEY, data)
-  markDirty()
 }
 
 function restoreAnswers() {
@@ -77,7 +76,7 @@ function clearPersist() {
   const data = load(PERSIST_KEY, {})
   delete data[posKey.value]
   save(PERSIST_KEY, data)
-  markDirty()
+  clearPracticeState(posKey.value)
 }
 
 function buildList() {
@@ -133,6 +132,7 @@ function markAnswered(ok) {
   if (!q.value) return
   answeredMap[q.value.id] = ok ? 'ok' : 'no'
   persistAnswers()
+  syncPracticeState(posKey.value, q.value.id, ok, selectionsMap[q.value.id] || undefined)
   if (ok) {
     if (mode.value === 'wrong') user.removeWrong(q.value.id)
     clearAuto()
@@ -189,6 +189,7 @@ function setSel(v) {
   if (!q.value) return
   selectionsMap[q.value.id] = v
   persistAnswers()
+  syncPracticeState(posKey.value, q.value.id, null, v)
 }
 
 function restart() {
