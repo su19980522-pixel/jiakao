@@ -8,6 +8,7 @@ import { shuffle, isCorrect, LETTERS, primaryPoint } from '../utils/question'
 import { CHAPTER_NAME_BY_ID } from '../data/chapters'
 import { POINT_NAME_BY_ID } from '../data/knowledgePoints'
 import { load, save } from '../utils/storage'
+import { markDirty } from '../utils/cloudSync'
 
 const route = useRoute()
 const router = useRouter()
@@ -61,6 +62,7 @@ function persistAnswers() {
     ans: { ...answeredMap }
   }
   save(PERSIST_KEY, data)
+  markDirty()
 }
 
 function restoreAnswers() {
@@ -75,6 +77,7 @@ function clearPersist() {
   const data = load(PERSIST_KEY, {})
   delete data[posKey.value]
   save(PERSIST_KEY, data)
+  markDirty()
 }
 
 function buildList() {

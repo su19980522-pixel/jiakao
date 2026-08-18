@@ -1,14 +1,27 @@
 <script setup>
+import { onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from './stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
 function goBack() {
   if (window.history.length > 1) {
     router.back()
   } else {
     router.push('/')
+  }
+}
+
+onMounted(() => {
+  auth.init()
+})
+
+async function doLogout() {
+  if (confirm('确定退出登录吗？本机数据会保留。')) {
+    await auth.logout()
   }
 }
 </script>
@@ -28,7 +41,14 @@ function goBack() {
       </svg>
     </span>
     <h1 class="title">驾考刷题</h1>
-    <span class="spacer" />
+    <div class="auth-area">
+      <template v-if="auth.isLoggedIn">
+        <span class="auth-email" :title="auth.email">{{ auth.email.split('@')[0] }}</span>
+        <span class="sync-dot" :class="auth.syncState" :title="auth.syncError || '云同步状态'"></span>
+        <button class="auth-btn" @click="doLogout">退出</button>
+      </template>
+      <button v-else class="auth-btn login-btn" @click="router.push('/login')">登录</button>
+    </div>
   </header>
   <main>
     <router-view />
@@ -56,10 +76,6 @@ function goBack() {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 1px;
-}
-
-.spacer {
-  width: 38px;
 }
 
 .back-btn {
@@ -96,5 +112,62 @@ function goBack() {
 .logo svg {
   width: 22px;
   height: 22px;
+}
+
+.auth-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 38px;
+  justify-content: flex-end;
+}
+
+.auth-email {
+  font-size: 13px;
+  opacity: 0.9;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  flex-shrink: 0;
+}
+
+.sync-dot.synced {
+  background: #4ade80;
+}
+
+.sync-dot.syncing {
+  background: #fbbf24;
+  animation: pulse 1s infinite;
+}
+
+.sync-dot.local {
+  background: #fbbf24;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.35; }
+}
+
+.auth-btn {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.auth-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
 }
 </style>

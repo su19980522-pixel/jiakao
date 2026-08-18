@@ -8,3 +8,4 @@ parsed_raw.json
 .DS_Store
 opencode.json
 gh_auth_*.txt
+wrangler_login*
