@@ -39,6 +39,10 @@ export const useUserStore = defineStore('user', {
       this.wrongIds = this.wrongIds.filter((x) => x !== id)
       cloudSync.syncWrong(id, false)
     },
+    clearAllWrong() {
+      this.wrongIds = []
+      cloudSync.clearWrongAll()
+    },
     toggleFav(id) {
       const add = !this.favIds.includes(id)
       if (add) {

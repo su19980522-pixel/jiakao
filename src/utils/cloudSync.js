@@ -45,16 +45,22 @@ export async function syncWrong(id, add) {
   if (!session) return
   try {
     if (add) {
-      await supabase.from('wrong_questions').upsert(
-        {
-          user_id: uid(),
-          question_id: String(id),
-          subject: await resolveSubject(id),
-          wrong_count: 1,
-          last_wrong_at: new Date().toISOString()
-        },
-        { onConflict: 'user_id,question_id', ignoreDuplicates: true }
-      )
+      const { error } = await supabase.rpc('add_wrong', {
+        qid: String(id),
+        subj: await resolveSubject(id)
+      })
+      if (error) {
+        await supabase.from('wrong_questions').upsert(
+          {
+            user_id: uid(),
+            question_id: String(id),
+            subject: await resolveSubject(id),
+            wrong_count: 1,
+            last_wrong_at: new Date().toISOString()
+          },
+          { onConflict: 'user_id,question_id', ignoreDuplicates: true }
+        )
+      }
     } else {
       await supabase.from('wrong_questions').delete().eq('user_id', uid()).eq('question_id', String(id))
     }
@@ -62,6 +68,35 @@ export async function syncWrong(id, add) {
   } catch {
     markError()
   }
+}
+
+export async function clearWrongAll() {
+  if (!session) return
+  try {
+    await supabase.from('wrong_questions').delete().eq('user_id', uid())
+    markSynced()
+  } catch {
+    markError()
+  }
+}
+
+export async function fetchWrongWithCounts() {
+  if (!session) return {}
+  const map = {}
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from('wrong_questions')
+      .select('question_id,wrong_count')
+      .eq('user_id', uid())
+      .order('id')
+      .range(from, from + 999)
+    if (error) throw error
+    for (const r of data || []) map[toId(r.question_id)] = r.wrong_count
+    if ((data || []).length < 1000) break
+    from += 1000
+  }
+  return map
 }
 
 export async function syncFav(id, add) {
@@ -206,7 +241,7 @@ export async function fetchPracticeState(posKey) {
   return { sels, ans }
 }
 
-// 全部作答记录（供统计用）
+// 全部作答记录（供统计用，含时间）
 export async function fetchAllPracticeState() {
   if (!session) return []
   const rows = []
@@ -214,7 +249,7 @@ export async function fetchAllPracticeState() {
   while (true) {
     const { data, error } = await supabase
       .from('practice_state')
-      .select('question_id,ok')
+      .select('question_id,ok,updated_at')
       .eq('user_id', uid())
       .order('id')
       .range(from, from + 999)

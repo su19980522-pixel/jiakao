@@ -7,7 +7,7 @@ import { useUserStore } from '../stores/user'
 import { shuffle, isCorrect, LETTERS, primaryPoint } from '../utils/question'
 import { CHAPTER_NAME_BY_ID } from '../data/chapters'
 import { POINT_NAME_BY_ID } from '../data/knowledgePoints'
-import { syncPracticeState, clearPracticeState, fetchPracticeState } from '../utils/cloudSync'
+import { syncPracticeState, clearPracticeState, fetchPracticeState, fetchWrongWithCounts } from '../utils/cloudSync'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,6 +26,8 @@ const finished = ref(false)
 const cardRef = ref(null)
 const gridWrapRef = ref(null)
 const loading = ref(false)
+const wrongSort = ref('random')
+const wrongCounts = ref({})
 let autoTimer = null
 
 const title = computed(() => {
@@ -62,10 +64,22 @@ async function buildList() {
     qs = qs.filter((q) => primaryPoint(q).id === chapter.value)
   } else if (mode.value === 'wrong') {
     qs = qs.filter((q) => user.wrongIds.includes(q.id))
+    if (wrongSort.value === 'count') {
+      try {
+        wrongCounts.value = await fetchWrongWithCounts()
+      } catch {
+        wrongCounts.value = {}
+      }
+      qs = qs.slice().sort((a, b) => (wrongCounts.value[b.id] || 0) - (wrongCounts.value[a.id] || 0))
+    } else if (wrongSort.value === 'point') {
+      qs = qs.slice().sort((a, b) => primaryPoint(a).id.localeCompare(primaryPoint(b).id))
+    } else {
+      qs = shuffle(qs)
+    }
   } else if (mode.value === 'favorite') {
     qs = qs.filter((q) => user.favIds.includes(q.id))
   }
-  if (mode.value === 'random' || mode.value === 'wrong' || mode.value === 'favorite') {
+  if (mode.value === 'random' || mode.value === 'favorite') {
     qs = shuffle(qs)
   }
   if (mode.value === 'order' || mode.value === 'chapter' || mode.value === 'point') {
@@ -178,6 +192,19 @@ function setSel(v) {
 function restart() {
   clearPracticeState(posKey.value)
   buildList()
+}
+
+function setWrongSort(s) {
+  wrongSort.value = s
+  current.value = 0
+  buildList()
+}
+
+function clearWrongs() {
+  if (confirm(`确定清空全部 ${total.value} 道错题吗？`)) {
+    user.clearAllWrong()
+    buildList()
+  }
 }
 
 function selectByKey(k) {
@@ -331,6 +358,15 @@ function cellClass(id, i) {
             <span><i class="dot ok" />答对 {{ correctCount }}</span>
             <span><i class="dot no" />答错 {{ answeredCount - correctCount }}</span>
             <span><i class="dot pending" />未做 {{ total - answeredCount }}</span>
+          </div>
+
+          <div v-if="mode === 'wrong'" class="wrong-tools">
+            <div class="mini-seg">
+              <button :class="{ active: wrongSort === 'random' }" @click="setWrongSort('random')">乱序</button>
+              <button :class="{ active: wrongSort === 'count' }" @click="setWrongSort('count')">按错误次数</button>
+              <button :class="{ active: wrongSort === 'point' }" @click="setWrongSort('point')">按知识点</button>
+            </div>
+            <button class="btn btn-danger btn-clear" @click="clearWrongs">清空错题本</button>
           </div>
 
           <div class="side-actions">
@@ -531,6 +567,44 @@ function cellClass(id, i) {
 .dot.ok { background: #8fd9b4; }
 .dot.no { background: #f4b6b8; }
 .dot.pending { background: #e0e6f3; }
+
+.wrong-tools {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mini-seg {
+  display: flex;
+  gap: 4px;
+  background: #eef1f8;
+  border-radius: 9px;
+  padding: 3px;
+}
+
+.mini-seg button {
+  flex: 1;
+  padding: 7px 4px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: transparent;
+  transition: all 0.15s;
+}
+
+.mini-seg button.active {
+  background: #fff;
+  color: var(--primary);
+  box-shadow: 0 1px 5px rgba(26, 36, 64, 0.12);
+}
+
+.btn-clear {
+  width: 100%;
+  padding: 9px;
+  font-size: 13.5px;
+}
 
 .side-actions {
   display: flex;

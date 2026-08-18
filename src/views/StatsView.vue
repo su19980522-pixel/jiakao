@@ -133,6 +133,56 @@ const examList = computed(() => {
 const examCount = computed(() => (cloudExams.value !== null ? cloudExams.value.filter((h) => h.subject === subject.value).length : user.examHistory.filter((h) => h.subject === subject.value).length))
 const examPassed = computed(() => (cloudExams.value !== null ? cloudExams.value.filter((h) => h.subject === subject.value && h.passed).length : user.examHistory.filter((h) => h.subject === subject.value && h.passed).length))
 
+// 每日刷题量（近 14 天，来自作答记录时间）
+function dayKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const dailyData = computed(() => {
+  const counts = {}
+  for (const r of practiceRows.value) {
+    if (!r.updated_at) continue
+    const d = new Date(r.updated_at)
+    const key = dayKey(d)
+    counts[key] = (counts[key] || 0) + 1
+  }
+  const days = []
+  const now = new Date()
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+    const key = dayKey(d)
+    days.push({
+      key,
+      label: `${d.getMonth() + 1}/${d.getDate()}`,
+      count: counts[key] || 0,
+      isToday: i === 0
+    })
+  }
+  const max = Math.max(1, ...days.map((x) => x.count))
+  days.forEach((x) => (x.h = Math.round((x.count / max) * 100)))
+  return days
+})
+
+const todayCount = computed(() => dailyData.value[dailyData.value.length - 1].count)
+
+const streakDays = computed(() => {
+  const counts = {}
+  for (const r of practiceRows.value) {
+    if (!r.updated_at) continue
+    const key = dayKey(new Date(r.updated_at))
+    counts[key] = 1
+  }
+  const now = new Date()
+  let streak = 0
+  let d = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (!counts[dayKey(d)]) d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1)
+  while (counts[dayKey(d)]) {
+    streak++
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1)
+  }
+  return streak
+})
+
 // SVG 折线图
 const CHART_W = 720
 const CHART_H = 280
@@ -203,6 +253,26 @@ function goPoint(pid) {
       <div class="card ov-card">
         <div class="ov-num c-amber">{{ favCount }}</div>
         <div class="ov-label">收藏</div>
+      </div>
+      <div class="card ov-card">
+        <div class="ov-num">{{ todayCount }}</div>
+        <div class="ov-label">今日刷题</div>
+      </div>
+      <div class="card ov-card">
+        <div class="ov-num c-green">{{ streakDays }}</div>
+        <div class="ov-label">连续天数</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="panel-title">每日刷题量（近 14 天）</div>
+      <div class="daily-chart">
+        <div v-for="d in dailyData" :key="d.key" class="daily-col" :title="`${d.label} 答题 ${d.count} 次`">
+          <div class="daily-bar-wrap">
+            <div class="daily-bar" :class="{ today: d.isToday }" :style="{ height: d.h + '%' }" />
+          </div>
+          <span class="daily-label" :class="{ today: d.isToday }">{{ d.label }}</span>
+        </div>
       </div>
     </div>
 
@@ -305,7 +375,7 @@ function goPoint(pid) {
 
 @media (min-width: 1024px) {
   .overview {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
@@ -395,6 +465,57 @@ function goPoint(pid) {
   color: var(--text-2);
   font-size: 13.5px;
   padding: 24px 0;
+}
+
+.daily-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 150px;
+  padding-top: 6px;
+}
+
+.daily-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+}
+
+.daily-bar-wrap {
+  flex: 1;
+  width: 100%;
+  max-width: 36px;
+  display: flex;
+  align-items: flex-end;
+  background: #f4f6fb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.daily-bar {
+  width: 100%;
+  min-height: 3px;
+  background: linear-gradient(180deg, #7c9ef8, #3b6ef6);
+  border-radius: 6px 6px 0 0;
+  transition: height 0.4s ease;
+}
+
+.daily-bar.today {
+  background: linear-gradient(180deg, #8fd9b4, #17a45c);
+}
+
+.daily-label {
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.daily-label.today {
+  color: var(--success-strong);
+  font-weight: 700;
 }
 
 .weak-list {

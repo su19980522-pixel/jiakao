@@ -13,8 +13,8 @@ const user = useUserStore()
 
 const subject = computed(() => Number(route.params.subject))
 const EXAM_CONFIG = {
-  1: { count: 100, minutes: 45 },
-  4: { count: 50, minutes: 30 }
+  1: { count: 100, minutes: 45, mix: { judge: 40, single: 60 }, mixLabel: '判断题 40 · 单选题 60' },
+  4: { count: 50, minutes: 30, mix: { single: 20, judge: 20, multi: 10 }, mixLabel: '单选 20 · 判断 20 · 多选 10' }
 }
 const config = computed(() => EXAM_CONFIG[subject.value])
 
@@ -30,10 +30,29 @@ let timer = null
 
 function init() {
   const pool = bank.questionsBySubject(subject.value)
-  questions.value = shuffle(pool).slice(0, Math.min(config.value.count, pool.length))
+  const cfg = config.value
+  const byType = {
+    single: pool.filter((q) => q.type === 'single'),
+    judge: pool.filter((q) => q.type === 'judge'),
+    multi: pool.filter((q) => q.type === 'multi')
+  }
+  const picked = []
+  for (const t of ['single', 'judge', 'multi']) {
+    const want = cfg.mix[t] || 0
+    if (want > 0) {
+      picked.push(...shuffle(byType[t]).slice(0, want))
+    }
+  }
+  const target = Math.min(cfg.count, pool.length)
+  if (picked.length < target) {
+    const pickedIds = new Set(picked.map((q) => q.id))
+    const rest = shuffle(pool.filter((q) => !pickedIds.has(q.id)))
+    picked.push(...rest.slice(0, target - picked.length))
+  }
+  questions.value = shuffle(picked).slice(0, target)
   answers.value = {}
   current.value = 0
-  remainSec.value = config.value.minutes * 60
+  remainSec.value = cfg.minutes * 60
   phase.value = 'exam'
   score.value = 0
   passed.value = false
@@ -150,6 +169,7 @@ function sheetClass(i) {
               <span class="dot">·</span>
               <span>已答 {{ answeredCount }}</span>
             </div>
+            <div class="mix-info">{{ config.mixLabel }}</div>
           </div>
 
           <div v-if="q">
@@ -184,6 +204,7 @@ function sheetClass(i) {
               <span class="dot">·</span>
               <span>已答 {{ answeredCount }}</span>
             </div>
+            <div class="mix-info">{{ config.mixLabel }}</div>
 
             <div class="sheet-title">
               <span>答题卡</span>
@@ -342,6 +363,14 @@ function sheetClass(i) {
 
 .dot {
   margin: 0 6px;
+}
+
+.mix-info {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: -8px;
+  margin-bottom: 12px;
 }
 
 .sheet-title {

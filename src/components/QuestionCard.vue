@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { isCorrect, LETTERS, TYPE_NAMES, getPoints } from '../utils/question'
 import { JUDGE_EXPLANATIONS } from '../data/judgeExplanations.js'
+import { SINGLE_EXPLANATIONS } from '../data/singleExplanations.js'
 
 const props = defineProps({
   question: { type: Object, required: true },
@@ -22,7 +23,9 @@ const answered = computed(() => props.modelValue.length > 0)
 const correct = computed(() => answered.value && isCorrect(q.value, props.modelValue))
 const imgs = computed(() => (q.value.images && q.value.images.length ? q.value.images : q.value.image ? [q.value.image] : []))
 const points = computed(() => getPoints(q.value))
-const explanation = computed(() => q.value.explanation || JUDGE_EXPLANATIONS[q.value.id] || '')
+const explanation = computed(
+  () => q.value.explanation || JUDGE_EXPLANATIONS[q.value.id] || SINGLE_EXPLANATIONS[q.value.id] || ''
+)
 
 function selectOption(letter) {
   if (showResult.value && props.mode !== 'exam') return
