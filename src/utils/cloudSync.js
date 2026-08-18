@@ -1,9 +1,6 @@
 import { supabase } from '../supabase'
-import { load, save } from './storage'
 
 let session = null
-
-const KEYS = ['wrong_ids', 'fav_ids', 'exam_history', 'practice_pos', 'practice_data']
 
 export function setSession(s) {
   session = s
@@ -40,7 +37,9 @@ async function resolveSubject(qid) {
   }
 }
 
-// ============ 推送（按表精细化操作） ============
+const toId = (s) => (/^\d+$/.test(String(s)) ? Number(s) : s)
+
+// ============ 推送（写数据库） ============
 
 export async function syncWrong(id, add) {
   if (!session) return
@@ -159,65 +158,104 @@ export async function clearPracticeState(posKey) {
   }
 }
 
-// ============ 拉取（登录/启动时全量拉取） ============
+// ============ 拉取（读数据库） ============
 
-const toId = (s) => (/^\d+$/.test(String(s)) ? Number(s) : s)
+export async function fetchExamRecords(limit = 100) {
+  if (!session) return []
+  const { data, error } = await supabase
+    .from('exam_records')
+    .select('*')
+    .eq('user_id', uid())
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return (data || []).map((r) => ({
+    subject: r.subject,
+    score: r.score,
+    passed: r.passed,
+    correct: r.correct,
+    total: r.total,
+    usedSec: r.used_sec,
+    time: new Date(r.created_at).getTime()
+  }))
+}
 
+// 某个练习模式的作答状态（分页拉取）
+export async function fetchPracticeState(posKey) {
+  if (!session) return { sels: {}, ans: {} }
+  const sels = {}
+  const ans = {}
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from('practice_state')
+      .select('question_id,ok,sel')
+      .eq('user_id', uid())
+      .eq('pos_key', posKey)
+      .order('id')
+      .range(from, from + 999)
+    if (error) throw error
+    for (const r of data || []) {
+      const id = toId(r.question_id)
+      if (r.sel) sels[id] = r.sel.split(',')
+      if (r.ok !== null && r.ok !== undefined) ans[id] = r.ok ? 'ok' : 'no'
+    }
+    if ((data || []).length < 1000) break
+    from += 1000
+  }
+  return { sels, ans }
+}
+
+// 全部作答记录（供统计用）
+export async function fetchAllPracticeState() {
+  if (!session) return []
+  const rows = []
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from('practice_state')
+      .select('question_id,ok')
+      .eq('user_id', uid())
+      .order('id')
+      .range(from, from + 999)
+    if (error) throw error
+    rows.push(...(data || []))
+    if ((data || []).length < 1000) break
+    from += 1000
+  }
+  return rows
+}
+
+// 登录/启动后全量加载用户数据到内存
 export async function afterAuth() {
   if (!session) return
   try {
-    const [w, f, e, p, st] = await Promise.all([
+    const [w, f, e, p] = await Promise.all([
       supabase.from('wrong_questions').select('question_id').eq('user_id', uid()),
       supabase.from('favorites').select('question_id').eq('user_id', uid()),
-      supabase.from('exam_records').select('*').eq('user_id', uid()).order('created_at', { ascending: false }).limit(50),
-      supabase.from('practice_positions').select('pos_key,idx').eq('user_id', uid()),
-      supabase.from('practice_state').select('pos_key,question_id,ok,sel').eq('user_id', uid())
+      fetchExamRecords(50),
+      supabase.from('practice_positions').select('pos_key,idx').eq('user_id', uid())
     ])
-    if (w.error || f.error || e.error || p.error || st.error) {
+    if (w.error || f.error || p.error) {
       console.warn('pull failed')
     } else {
-      const data = {
+      const practice_pos = {}
+      for (const r of p.data || []) practice_pos[r.pos_key] = r.idx
+      const { useUserStore } = await import('../stores/user')
+      useUserStore().setAll({
         wrong_ids: (w.data || []).map((r) => toId(r.question_id)),
         fav_ids: (f.data || []).map((r) => toId(r.question_id)),
-        exam_history: (e.data || []).map((r) => ({
-          subject: r.subject,
-          score: r.score,
-          passed: r.passed,
-          correct: r.correct,
-          total: r.total,
-          usedSec: r.used_sec,
-          time: new Date(r.created_at).getTime()
-        })),
-        practice_pos: {},
-        practice_data: {}
-      }
-      for (const r of p.data || []) data.practice_pos[r.pos_key] = r.idx
-      for (const r of st.data || []) {
-        const pd = data.practice_data[r.pos_key] || (data.practice_data[r.pos_key] = { sels: {}, ans: {} })
-        if (r.sel) pd.sels[toId(r.question_id)] = r.sel.split(',')
-        if (r.ok !== null && r.ok !== undefined) pd.ans[toId(r.question_id)] = r.ok ? 'ok' : 'no'
-      }
-      applyData(data)
+        exam_history: e,
+        practice_pos
+      })
+      const auth = await getAuthStore()
+      auth.syncedAt = Date.now()
+      auth.syncError = ''
     }
   } catch (e) {
     console.warn('pull failed:', e.message)
   }
   await migrateLegacy()
-}
-
-function applyData(data) {
-  for (const key of KEYS) {
-    if (data[key] !== undefined) save(key, data[key])
-  }
-  import('../stores/user').then(({ useUserStore }) => {
-    const user = useUserStore()
-    user.$patch({
-      wrongIds: data.wrong_ids || [],
-      favIds: data.fav_ids || [],
-      examHistory: data.exam_history || [],
-      practicePos: data.practice_pos || {}
-    })
-  })
 }
 
 // 旧版 user_data 单表 JSON 的一次性迁移

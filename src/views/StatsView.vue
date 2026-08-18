@@ -5,7 +5,7 @@ import { useBankStore } from '../stores/bank'
 import { useUserStore } from '../stores/user'
 import { useAuthStore } from '../stores/auth'
 import { supabase } from '../supabase'
-import { load } from '../utils/storage'
+import { fetchAllPracticeState } from '../utils/cloudSync'
 import { primaryPoint } from '../utils/question'
 import { KNOWLEDGE_POINTS, POINT_NAME_BY_ID } from '../data/knowledgePoints'
 
@@ -16,21 +16,26 @@ const auth = useAuthStore()
 
 const subject = ref(1)
 const cloudExams = ref(null)
-
-const practiceData = load('practice_data', {})
+const practiceRows = ref([])
+const loaded = ref(false)
 
 const points = computed(() => KNOWLEDGE_POINTS[subject.value])
 
 onMounted(async () => {
   if (auth.isLoggedIn) {
-    const { data, error } = await supabase
-      .from('exam_records')
-      .select('*')
-      .eq('user_id', auth.session.user.id)
-      .order('created_at', { ascending: false })
-      .limit(100)
-    if (!error && data) {
-      cloudExams.value = data.map((r) => ({
+    const [rows, exams] = await Promise.allSettled([
+      fetchAllPracticeState(),
+      supabase
+        .from('exam_records')
+        .select('*')
+        .eq('user_id', auth.session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(100)
+    ])
+    if (rows.status === 'fulfilled') practiceRows.value = rows.value
+    const e = exams.status === 'fulfilled' ? exams.value : null
+    if (e && !e.error && e.data) {
+      cloudExams.value = e.data.map((r) => ({
         subject: r.subject,
         score: r.score,
         passed: r.passed,
@@ -41,23 +46,22 @@ onMounted(async () => {
       }))
     }
   }
+  loaded.value = true
 })
 
 const toId = (s) => (/^\d+$/.test(String(s)) ? Number(s) : s)
 
-// 各知识点作答统计（来自练习作答状态）
+// 各知识点作答统计（来自数据库 practice_state）
 const attempts = computed(() => {
   const perP = {}
-  for (const posKey in practiceData) {
-    const ans = practiceData[posKey].ans || {}
-    for (const qid in ans) {
-      const q = bank.allQuestions.find((x) => x.id === toId(qid))
-      if (!q || q.subject !== subject.value) continue
-      const p = primaryPoint(q)
-      const r = perP[p.id] || (perP[p.id] = { point: p, ok: 0, no: 0 })
-      if (ans[qid] === 'ok') r.ok++
-      else r.no++
-    }
+  for (const r of practiceRows.value) {
+    if (r.ok === null || r.ok === undefined) continue
+    const q = bank.allQuestions.find((x) => x.id === toId(r.question_id))
+    if (!q || q.subject !== subject.value) continue
+    const p = primaryPoint(q)
+    const rec = perP[p.id] || (perP[p.id] = { point: p, ok: 0, no: 0 })
+    if (r.ok) rec.ok++
+    else rec.no++
   }
   return Object.values(perP)
 })
@@ -164,6 +168,11 @@ function goPoint(pid) {
 
 <template>
   <div class="page stats-page">
+    <div v-if="!loaded" class="card loading-card">
+      <span class="spinner" />
+      正在加载统计数据…
+    </div>
+    <template v-else>
     <div class="seg seg-main">
       <button v-for="sub in [1, 4]" :key="sub" :class="{ active: subject === sub }" @click="subject = sub">
         {{ sub === 1 ? '科目一' : '科目四' }}
@@ -247,6 +256,7 @@ function goPoint(pid) {
         </button>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
@@ -254,6 +264,31 @@ function goPoint(pid) {
 .stats-page {
   max-width: 980px;
   margin: 0 auto;
+}
+
+.loading-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 20px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid #dbe4ff;
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .seg-main {

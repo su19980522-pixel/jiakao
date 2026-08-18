@@ -32,6 +32,7 @@ export const useAuthStore = defineStore('auth', {
         if (event === 'SIGNED_OUT') {
           this.syncedAt = 0
           this.syncing = false
+          import('../stores/user').then(({ useUserStore }) => useUserStore().clearAll())
         }
       })
       const { data } = await supabase.auth.getSession()

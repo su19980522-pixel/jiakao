@@ -86,7 +86,7 @@ function switchMode(m) {
         {{ loading ? '请稍候…' : mode === 'login' ? '登录' : '注册并登录' }}
       </button>
 
-      <p class="tip">未登录也可正常刷题，数据保存在本机浏览器；登录后自动云端同步。</p>
+      <p class="tip">所有数据（错题、收藏、进度、考试记录）保存在云端数据库，换设备登录同一账号即可继续。</p>
     </div>
   </div>
 </template>

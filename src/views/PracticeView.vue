@@ -7,8 +7,7 @@ import { useUserStore } from '../stores/user'
 import { shuffle, isCorrect, LETTERS, primaryPoint } from '../utils/question'
 import { CHAPTER_NAME_BY_ID } from '../data/chapters'
 import { POINT_NAME_BY_ID } from '../data/knowledgePoints'
-import { load, save } from '../utils/storage'
-import { syncPracticeState, clearPracticeState } from '../utils/cloudSync'
+import { syncPracticeState, clearPracticeState, fetchPracticeState } from '../utils/cloudSync'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,6 +25,7 @@ const answeredMap = reactive({})
 const finished = ref(false)
 const cardRef = ref(null)
 const gridWrapRef = ref(null)
+const loading = ref(false)
 let autoTimer = null
 
 const title = computed(() => {
@@ -48,38 +48,13 @@ const title = computed(() => {
 })
 
 const posKey = computed(() => `${subject.value}_${mode.value}_${chapter.value}`)
-const PERSIST_KEY = 'practice_data'
 
 function resetMaps() {
   Object.keys(selectionsMap).forEach((k) => delete selectionsMap[k])
   Object.keys(answeredMap).forEach((k) => delete answeredMap[k])
 }
 
-function persistAnswers() {
-  const data = load(PERSIST_KEY, {})
-  data[posKey.value] = {
-    sels: { ...selectionsMap },
-    ans: { ...answeredMap }
-  }
-  save(PERSIST_KEY, data)
-}
-
-function restoreAnswers() {
-  const saved = load(PERSIST_KEY, {})[posKey.value]
-  if (saved) {
-    Object.assign(answeredMap, saved.ans || {})
-    Object.assign(selectionsMap, saved.sels || {})
-  }
-}
-
-function clearPersist() {
-  const data = load(PERSIST_KEY, {})
-  delete data[posKey.value]
-  save(PERSIST_KEY, data)
-  clearPracticeState(posKey.value)
-}
-
-function buildList() {
+async function buildList() {
   let qs = bank.questionsBySubject(subject.value)
   if (mode.value === 'chapter') {
     qs = qs.filter((q) => q.chapter === chapter.value)
@@ -102,8 +77,18 @@ function buildList() {
   list.value = qs
   resetMaps()
   clearAuto()
-  restoreAnswers()
   finished.value = qs.length === 0
+  if (!finished.value) {
+    loading.value = true
+    try {
+      const state = await fetchPracticeState(posKey.value)
+      Object.assign(selectionsMap, state.sels)
+      Object.assign(answeredMap, state.ans)
+    } catch (e) {
+      console.warn('加载练习记录失败:', e.message)
+    }
+    loading.value = false
+  }
 }
 
 buildList()
@@ -131,7 +116,6 @@ function clearAuto() {
 function markAnswered(ok) {
   if (!q.value) return
   answeredMap[q.value.id] = ok ? 'ok' : 'no'
-  persistAnswers()
   syncPracticeState(posKey.value, q.value.id, ok, selectionsMap[q.value.id] || undefined)
   if (ok) {
     if (mode.value === 'wrong') user.removeWrong(q.value.id)
@@ -188,12 +172,11 @@ function toggleFav() {
 function setSel(v) {
   if (!q.value) return
   selectionsMap[q.value.id] = v
-  persistAnswers()
   syncPracticeState(posKey.value, q.value.id, null, v)
 }
 
 function restart() {
-  clearPersist()
+  clearPracticeState(posKey.value)
   buildList()
 }
 
@@ -278,20 +261,26 @@ function cellClass(id, i) {
 
     <div v-else class="layout">
       <div class="main">
-        <div class="q-index-row">
-          <span class="q-index">{{ current + 1 }} / {{ total }}</span>
+        <div v-if="loading" class="card loading-card">
+          <span class="spinner" />
+          正在加载练习记录…
         </div>
-        <QuestionCard
-          ref="cardRef"
-          :key="q.id + '-' + current"
-          :question="q"
-          mode="practice"
-          :model-value="selectionsMap[q.id] || []"
-          :reveal="answeredMap[q.id] !== undefined"
-          :auto-next="true"
-          @update:model-value="setSel"
-          @answered="markAnswered"
-        />
+        <template v-else>
+          <div class="q-index-row">
+            <span class="q-index">{{ current + 1 }} / {{ total }}</span>
+          </div>
+          <QuestionCard
+            ref="cardRef"
+            :key="q.id + '-' + current"
+            :question="q"
+            mode="practice"
+            :model-value="selectionsMap[q.id] || []"
+            :reveal="answeredMap[q.id] !== undefined"
+            :auto-next="true"
+            @update:model-value="setSel"
+            @answered="markAnswered"
+          />
+        </template>
 
         <div class="actions mobile-only">
           <button class="btn btn-plain" :disabled="current === 0" @click="prev">上一题</button>
@@ -429,6 +418,31 @@ function cellClass(id, i) {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 8px;
+}
+
+.loading-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 20px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid #dbe4ff;
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .q-index {

@@ -1,11 +1,12 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const ready = ref(false)
 
 function goBack() {
   if (window.history.length > 1) {
@@ -15,13 +16,27 @@ function goBack() {
   }
 }
 
-onMounted(() => {
-  auth.init()
+onMounted(async () => {
+  await auth.init()
+  ready.value = true
 })
 
+watch(
+  [ready, () => auth.isLoggedIn, () => route.name],
+  () => {
+    if (!ready.value) return
+    if (!auth.isLoggedIn && route.name !== 'login') {
+      router.replace('/login')
+    } else if (auth.isLoggedIn && route.name === 'login') {
+      router.replace('/')
+    }
+  }
+)
+
 async function doLogout() {
-  if (confirm('确定退出登录吗？本机数据会保留。')) {
+  if (confirm('确定退出登录吗？')) {
     await auth.logout()
+    router.replace('/login')
   }
 }
 </script>
