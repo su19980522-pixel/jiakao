@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { isCorrect, LETTERS, TYPE_NAMES, getPoints } from '../utils/question'
+import { JUDGE_EXPLANATIONS } from '../data/judgeExplanations.js'
 
 const props = defineProps({
   question: { type: Object, required: true },
@@ -21,6 +22,7 @@ const answered = computed(() => props.modelValue.length > 0)
 const correct = computed(() => answered.value && isCorrect(q.value, props.modelValue))
 const imgs = computed(() => (q.value.images && q.value.images.length ? q.value.images : q.value.image ? [q.value.image] : []))
 const points = computed(() => getPoints(q.value))
+const explanation = computed(() => q.value.explanation || JUDGE_EXPLANATIONS[q.value.id] || '')
 
 function selectOption(letter) {
   if (showResult.value && props.mode !== 'exam') return
@@ -130,9 +132,9 @@ function optionClass(letter) {
           <span v-if="!correct" class="answer-key">正确答案：{{ q.answer.join('、') }}</span>
           <span v-if="correct && autoNext && mode === 'practice'" class="auto-next-tip">稍后自动进入下一题</span>
         </div>
-        <div v-if="q.explanation" class="explain-body">
+        <div v-if="explanation" class="explain-body">
           <span class="exp-tag">解析</span>
-          {{ q.explanation }}
+          {{ explanation }}
         </div>
         <div v-if="points.length" class="points">
           <span class="points-label">相关知识点</span>
