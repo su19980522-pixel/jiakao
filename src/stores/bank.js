@@ -4,13 +4,17 @@ import { REAL_QUESTIONS } from '../data/realQuestions'
 import { normalizeQuestion } from '../utils/question'
 import { load, save } from '../utils/storage'
 
+const toArrayAnswer = (q) => (Array.isArray(q.answer) ? q : { ...q, answer: String(q.answer || '').split(',') })
+
+const BASE_QUESTIONS = [...SAMPLE_QUESTIONS, ...REAL_QUESTIONS].map(toArrayAnswer)
+
 export const useBankStore = defineStore('bank', {
   state: () => ({
-    imported: load('imported_questions', [])
+    imported: load('imported_questions', []).map(toArrayAnswer)
   }),
   getters: {
     allQuestions(state) {
-      return [...SAMPLE_QUESTIONS, ...REAL_QUESTIONS, ...state.imported]
+      return [...BASE_QUESTIONS, ...state.imported]
     },
     questionsBySubject() {
       return (subject) => this.allQuestions.filter((q) => q.subject === subject)
