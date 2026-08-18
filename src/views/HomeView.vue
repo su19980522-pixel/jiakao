@@ -249,6 +249,23 @@ function modeAction(key) {
     </div>
 
     <div class="manage-row">
+      <button class="card manage-card" @click="router.push('/stats')">
+        <span class="manage-icon stats-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3v18h18" />
+            <path d="M7 15l4-5 3 3 5-7" />
+          </svg>
+        </span>
+        <span class="manage-text">
+          <b>学习统计</b>
+          <i>正确率趋势 · 薄弱知识点</i>
+        </span>
+        <span class="mode-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </button>
       <button class="card manage-card" @click="router.push('/import')">
         <span class="manage-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -633,6 +650,15 @@ function modeAction(key) {
 /* ---------- 题库管理入口 ---------- */
 .manage-row {
   margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 1024px) {
+  .manage-row {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .manage-card {
@@ -660,6 +686,11 @@ function modeAction(key) {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.stats-icon {
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
 }
 
 .manage-icon svg {
